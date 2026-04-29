@@ -1,0 +1,10 @@
+services:
+  lexi-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - lexi-data:/app/lexi.db
+
+volumes:
+  lexi-data:

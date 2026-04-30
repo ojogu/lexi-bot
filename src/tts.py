@@ -1,20 +1,19 @@
 """
-Text-to-speech via YarnGPT API.
-Generates a Nigerian-accented pronunciation of a word or phrase.
-Returns raw audio bytes in opus format, ready to send as a Telegram voice note.
+Text-to-speech via ElevenLabs SDK.
+Generates natural-sounding pronunciation of a word or phrase.
+Returns raw audio bytes in mp3 format, ready to send as a Telegram voice note.
 """
 
 import re
 import logging
-import requests
-from src.config import YARNGPT_API_KEY, YARNGPT_VOICE
+from elevenlabs.client import ElevenLabs
+from src.config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
 
 logger = logging.getLogger(__name__)
 
-YARNGPT_API_URL = "https://yarngpt.ai/api/v1/tts"
-TIMEOUT_SECONDS = 60
+_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-# Common question prefixes users might send
+# Common question prefixes to strip before passing to TTS
 _QUESTION_PREFIXES = re.compile(
     r"^(what'?s\s+a[n]?\s+|what\s+is\s+a[n]?\s+|define\s+|meaning\s+of\s+|explain\s+)",
     re.IGNORECASE,
@@ -34,56 +33,27 @@ def extract_word(text: str) -> str:
 
 def generate_pronunciation(word: str) -> bytes | None:
     """
-    Call YarnGPT and return opus audio bytes for the given word.
-    Returns None if the call fails — caller should handle gracefully.
+    Call ElevenLabs and return mp3 audio bytes for the given word.
+    Returns None if the call fails — caller handles gracefully.
     """
     core_word = extract_word(word)
-    text = _build_pronunciation_text(core_word)
-    payload = {
-        "text": text,
-        "voice": YARNGPT_VOICE,
-        "response_format": "opus",
-    }
+    text = f"Let me pronounce that for you. {core_word}. {core_word}."
 
-    logger.info(f"[YarnGPT] Requesting pronunciation for '{core_word}' (input: '{word}')")
+    logger.info(f"[ElevenLabs] Requesting pronunciation for '{core_word}' (input: '{word}')")
 
     try:
-        response = requests.post(
-            YARNGPT_API_URL,
-            headers={
-                "Authorization": f"Bearer {YARNGPT_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=TIMEOUT_SECONDS,
-            stream=True,
+        audio = _client.text_to_speech.convert(
+            text=text,
+            voice_id=ELEVENLABS_VOICE_ID,
+            model_id="eleven_flash_v2_5",  # lowest latency model
+            output_format="mp3_44100_128",
         )
 
-        logger.info(f"[YarnGPT] Response status: {response.status_code}")
+        # SDK returns a generator — collect all chunks into bytes
+        audio_bytes = b"".join(audio)
+        logger.info(f"[ElevenLabs] Audio received: {len(audio_bytes)} bytes")
+        return audio_bytes
 
-        if response.status_code == 200:
-            audio = response.content
-            logger.info(f"[YarnGPT] Audio received: {len(audio)} bytes")
-            return audio
-        else:
-            logger.error(
-                f"[YarnGPT] API error {response.status_code}: {response.text[:300]}"
-            )
-            return None
-
-    except requests.exceptions.Timeout:
-        logger.error(f"[YarnGPT] Request timed out after {TIMEOUT_SECONDS}s for word '{core_word}'")
+    except Exception as e:
+        logger.error(f"[ElevenLabs] Request failed: {type(e).__name__}: {e}")
         return None
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"[YarnGPT] Connection error - cannot reach {YARNGPT_API_URL}: {e}")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"[YarnGPT] Request failed: {type(e).__name__}: {e}")
-        return None
-
-
-def _build_pronunciation_text(word: str) -> str:
-    """
-    Saying the word twice helps with retention.
-    """
-    return f"Let me pronounce that for you. {word}. {word}."

@@ -11,12 +11,14 @@ DB_PATH = os.getenv("DB_PATH", str(Path(__file__).parent.parent / "lexi.db"))
 REVIEW_HOUR = int(os.getenv("REVIEW_HOUR", "18"))  # 6 PM
 REVIEW_MINUTE = int(os.getenv("REVIEW_MINUTE", "0"))
 TIMEZONE = os.getenv("TIMEZONE", "Africa/Lagos")
-YARNGPT_API_KEY = os.getenv("YARNGPT_API_KEY")
-YARNGPT_VOICE = os.getenv("YARNGPT_VOICE", "Idera")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
 
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_TOKEN is not set in .env")
 if not API_KEY:
     raise ValueError("API_KEY is not set in .env")
-if not YARNGPT_API_KEY:
+if not ELEVENLABS_API_KEY:
     raise ValueError("YARNGPT_API_KEY is not set in .env")
+if not ELEVENLABS_VOICE_ID:
+    raise ValueError("ELEVENLABS_VOICE_ID is not set in .env")

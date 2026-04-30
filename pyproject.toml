@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "apscheduler==3.10.4",
     "dotenv>=0.9.9",
+    "elevenlabs>=2.45.0",
     "litellm==1.48.7",
     "python-dotenv==1.0.1",
     "python-telegram-bot==21.6",

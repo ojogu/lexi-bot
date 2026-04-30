@@ -6,10 +6,10 @@ import logging
 from telegram import BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
-from config import TELEGRAM_TOKEN
-from handlers import start, help_command, my_words, handle_message, error_handler
-from scheduler import build_scheduler
-from word_log import init_db
+from src.config import TELEGRAM_TOKEN
+from src.handlers import start, help_command, my_words, handle_message, error_handler
+from src.scheduler import build_scheduler
+from src.word_log import init_db
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -18,8 +18,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_COMMANDS = [
-    BotCommand("start",   "Welcome message"),
-    BotCommand("help",    "How to use Lexi"),
+    BotCommand("start", "Welcome message"),
+    BotCommand("help", "How to use Lexi"),
     BotCommand("mywords", "See your words for this week"),
 ]
 
@@ -33,12 +33,7 @@ def main():
     init_db()
     logger.info("Database initialised")
 
-    app = (
-        ApplicationBuilder()
-        .token(TELEGRAM_TOKEN)
-        .post_init(on_startup)
-        .build()
-    )
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
 
     # Commands
     app.add_handler(CommandHandler("start", start))

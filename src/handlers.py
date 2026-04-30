@@ -3,52 +3,87 @@ Telegram message handlers for Lexi bot.
 """
 
 import logging
+import re
+from io import BytesIO
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.lexi import detect_intent, explain_word, fix_spelling, compare_words
 from src.word_log import log_word, get_review_state
 from src.review import handle_review_answer
+from src.tts import generate_pronunciation, extract_word
 
 logger = logging.getLogger(__name__)
+
+
+async def _send_llm_response(message, text: str):
+    """
+    Send LLM-generated HTML text safely.
+    Falls back to plain text if Telegram rejects the HTML.
+    """
+    try:
+        await message.reply_text(text, parse_mode="HTML")
+    except Exception:
+        try:
+            plain = re.sub(r'<[^>]+>', '', text)
+            await message.reply_text(plain)
+        except Exception as e:
+            logger.error(f"Failed to send response: {e}")
+            await message.reply_text("Got the answer but had trouble formatting it. Try again. 🙏")
+
+
+async def _send_pronunciation(message, word: str):
+    """
+    Generate and send a voice note for the word.
+    Sends a status message first since TTS generation can take a few seconds.
+    Fails silently — the text card already delivered value.
+    """
+    try:
+        status = await message.reply_text("🎙️ Generating pronunciation...")
+        audio_bytes = generate_pronunciation(word)
+        await status.delete()
+        if audio_bytes:
+            await message.reply_voice(
+                voice=BytesIO(audio_bytes),
+                caption=f"🔊 {extract_word(word).capitalize()}",
+            )
+    except Exception as e:
+        logger.error(f"Failed to send pronunciation for '{word}': {e}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name or "there"
     await update.message.reply_text(
-        f"👋 Hey {name}! I'm <b>Lexi</b>, your personal vocab tutor.\n\n"
+        f"👋 Hey {name}! I'm Lexi, your personal vocab tutor.\n\n"
         f"Here's what I can do:\n"
-        f"• <b>Look up any word</b> — meaning, pronunciation, examples, memory hook\n"
-        f"• <b>Fix your spelling</b> — just send the word or ask 'how do you spell...'\n"
-        f"• <b>Compare words</b> — 'difference between too and to', 'affect vs effect'\n\n"
-        f"Every Friday at 6 PM, I'll quiz you on the words you looked up this week.\n\n"
-        f"Try it now. Send me anything 👇",
-        parse_mode="HTML",
+        f"• Look up any word - meaning, pronunciation, examples, memory hook\n"
+        f"• Fix your spelling - just send the word or ask 'how do you spell...'\n"
+        f"• Compare words - 'difference between too and to', 'affect vs effect'\n\n"
+        f"Every Friday at 6 PM, I'll quiz you on the words you looked up that week.\n\n"
+        f"Try it now. Send me anything 👇"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "<b>How to use Lexi:</b>\n\n"
-        "<b>Look up a word:</b> just send it\n"
-        "Example: <code>volatile</code>\n\n"
-        "<b>Fix spelling:</b> send the word or ask directly\n"
-        "Example: <code>emmbarasment</code> or <code>how do you spell necessary</code>\n\n"
-        "<b>Compare words:</b> ask the difference\n"
-        "Example: <code>difference between too and to</code> or <code>affect vs effect</code>\n\n"
+        "How to use Lexi:\n\n"
+        "Look up a word: just send it\n"
+        "Example: volatile\n\n"
+        "Fix spelling: send the word or ask directly\n"
+        "Example: emmbarasment  or  how do you spell necessary\n\n"
+        "Compare words: ask the difference\n"
+        "Example: difference between too and to  or  affect vs effect\n\n"
         "Every Friday evening I'll quiz you on your week's words.\n"
         "Answer my questions and I'll tell you if you're right.\n\n"
-        "<b>Commands:</b>\n"
+        "Commands:\n"
         "/start - Welcome message\n"
         "/help - This message\n"
-        "/mywords - See words you looked up this week",
-        parse_mode="HTML",
+        "/mywords - See words you looked up this week"
     )
 
 
 async def my_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from src.word_log import get_week_words
-
     user_id = update.effective_user.id
     words = get_week_words(user_id)
     if not words:
@@ -58,9 +93,8 @@ async def my_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     word_list = "\n".join(f"• {w.capitalize()}" for w in words)
     await update.message.reply_text(
-        f"📖 <b>Your words this week:</b>\n\n{word_list}\n\n"
-        f"I'll quiz you on these Friday at 6 PM.",
-        parse_mode="HTML",
+        f"📖 Your words this week:\n\n{word_list}\n\n"
+        f"I'll quiz you on these Friday at 6 PM."
     )
 
 
@@ -71,7 +105,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
-    # If review is active, route to review handler first
     state = get_review_state(user_id)
     if state:
         handled = await handle_review_answer(
@@ -80,8 +113,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if handled:
             return
 
-    # Detect intent then route accordingly
-    # Hard cap: if input is very long it's not a vocab query
     if len(text.split()) > 12:
         await update.message.reply_text(
             "Keep it short. Send me a word, a spelling question, or something like "
@@ -96,18 +127,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if intent == "SPELLING":
             result = fix_spelling(text)
-            # Spelling corrections don't get logged as word lookups
-            await update.message.reply_text(result, parse_mode="HTML")
+            await _send_llm_response(update.message, result)
 
         elif intent == "COMPARE":
             result = compare_words(text)
-            # Log both words if we can parse them, else skip logging
-            await update.message.reply_text(result, parse_mode="HTML")
+            await _send_llm_response(update.message, result)
 
-        else:  # WORD_LOOKUP (default)
+        else:  # WORD_LOOKUP
             result = explain_word(text)
             log_word(user_id, text)
-            await update.message.reply_text(result, parse_mode="HTML")
+            await _send_llm_response(update.message, result)
+            await _send_pronunciation(update.message, text)
 
     except Exception as e:
         logger.error(f"Error handling message '{text}': {e}")

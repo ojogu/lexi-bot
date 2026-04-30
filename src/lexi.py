@@ -38,7 +38,7 @@ def detect_intent(text: str) -> str:
 
 
 def explain_word(word: str) -> str:
-    """Call LLM and return the formatted markdown explanation."""
+    """Call LLM and return an HTML-formatted word explanation."""
     response = litellm.completion(
         api_key=API_KEY,
         model=MODEL,
@@ -122,9 +122,7 @@ def grade_sentence(word: str, sentence: str) -> dict:
     return _parse_grade(raw)
 
 
-def grade_answer(
-    word: str, question: str, correct_answer: str, user_answer: str
-) -> dict:
+def grade_answer(word: str, question: str, correct_answer: str, user_answer: str) -> dict:
     """
     Grade a fill-in-the-blank or true/false answer.
     Simple string comparison, no LLM needed.
@@ -132,14 +130,13 @@ def grade_answer(
     """
     is_correct = user_answer.strip().lower() == correct_answer.strip().lower()
     if is_correct:
-        feedback = f"Correct! You've got *{word}* down."
+        feedback = f"Correct! You've got <b>{word}</b> down."
     else:
-        feedback = f"Not quite. The right answer is *{correct_answer}*."
+        feedback = f"Not quite. The right answer is <b>{correct_answer}</b>."
     return {"correct": is_correct, "feedback": feedback}
 
 
 # ── Parsers ───────────────────────────────────────────────────────────────────
-
 
 def _parse_question(raw: str) -> dict:
     result = {}

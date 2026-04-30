@@ -6,9 +6,9 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from lexi import detect_intent, explain_word, fix_spelling, compare_words
-from word_log import log_word, get_review_state
-from review import handle_review_answer
+from src.lexi import detect_intent, explain_word, fix_spelling, compare_words
+from src.word_log import log_word, get_review_state
+from src.review import handle_review_answer
 
 logger = logging.getLogger(__name__)
 
@@ -16,38 +16,39 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name or "there"
     await update.message.reply_text(
-        f"👋 Hey {name}! I'm *Lexi*, your personal vocab tutor.\n\n"
+        f"👋 Hey {name}! I'm <b>Lexi</b>, your personal vocab tutor.\n\n"
         f"Here's what I can do:\n"
-        f"• *Look up any word* — meaning, pronunciation, examples, memory hook\n"
-        f"• *Fix your spelling* — just send the word or ask 'how do you spell...'\n"
-        f"• *Compare words* — 'difference between too and to', 'affect vs effect'\n\n"
-        f"Every Friday at 6 PM, I'll quiz you on the words you looked up that week.\n\n"
+        f"• <b>Look up any word</b> — meaning, pronunciation, examples, memory hook\n"
+        f"• <b>Fix your spelling</b> — just send the word or ask 'how do you spell...'\n"
+        f"• <b>Compare words</b> — 'difference between too and to', 'affect vs effect'\n\n"
+        f"Every Friday at 6 PM, I'll quiz you on the words you looked up this week.\n\n"
         f"Try it now. Send me anything 👇",
-        parse_mode="Markdown"
+        parse_mode="HTML",
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "*How to use Lexi:*\n\n"
-        "*Look up a word:* just send it\n"
-        "Example: `volatile`\n\n"
-        "*Fix spelling:* send the word or ask directly\n"
-        "Example: `emmbarasment` or `how do you spell necessary`\n\n"
-        "*Compare words:* ask the difference\n"
-        "Example: `difference between too and to` or `affect vs effect`\n\n"
+        "<b>How to use Lexi:</b>\n\n"
+        "<b>Look up a word:</b> just send it\n"
+        "Example: <code>volatile</code>\n\n"
+        "<b>Fix spelling:</b> send the word or ask directly\n"
+        "Example: <code>emmbarasment</code> or <code>how do you spell necessary</code>\n\n"
+        "<b>Compare words:</b> ask the difference\n"
+        "Example: <code>difference between too and to</code> or <code>affect vs effect</code>\n\n"
         "Every Friday evening I'll quiz you on your week's words.\n"
         "Answer my questions and I'll tell you if you're right.\n\n"
-        "*Commands:*\n"
+        "<b>Commands:</b>\n"
         "/start - Welcome message\n"
         "/help - This message\n"
         "/mywords - See words you looked up this week",
-        parse_mode="Markdown"
+        parse_mode="HTML",
     )
 
 
 async def my_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from word_log import get_week_words
+    from src.word_log import get_week_words
+
     user_id = update.effective_user.id
     words = get_week_words(user_id)
     if not words:
@@ -57,9 +58,9 @@ async def my_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     word_list = "\n".join(f"• {w.capitalize()}" for w in words)
     await update.message.reply_text(
-        f"📖 *Your words this week:*\n\n{word_list}\n\n"
+        f"📖 <b>Your words this week:</b>\n\n{word_list}\n\n"
         f"I'll quiz you on these Friday at 6 PM.",
-        parse_mode="Markdown"
+        parse_mode="HTML",
     )
 
 
@@ -96,17 +97,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if intent == "SPELLING":
             result = fix_spelling(text)
             # Spelling corrections don't get logged as word lookups
-            await update.message.reply_text(result, parse_mode="Markdown")
+            await update.message.reply_text(result, parse_mode="HTML")
 
         elif intent == "COMPARE":
             result = compare_words(text)
             # Log both words if we can parse them, else skip logging
-            await update.message.reply_text(result, parse_mode="Markdown")
+            await update.message.reply_text(result, parse_mode="HTML")
 
         else:  # WORD_LOOKUP (default)
             result = explain_word(text)
             log_word(user_id, text)
-            await update.message.reply_text(result, parse_mode="Markdown")
+            await update.message.reply_text(result, parse_mode="HTML")
 
     except Exception as e:
         logger.error(f"Error handling message '{text}': {e}")

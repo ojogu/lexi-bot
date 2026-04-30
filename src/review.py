@@ -3,8 +3,8 @@ Friday review session logic.
 Generates quiz questions, handles answers, grades responses.
 """
 
-from lexi import generate_review_question, grade_sentence, grade_answer
-from word_log import (
+from src.lexi import generate_review_question, grade_sentence, grade_answer
+from src.word_log import (
     get_week_words,
     get_all_user_ids,
     set_review_state,
@@ -15,9 +15,9 @@ from word_log import (
 
 
 def build_intro(words: list[str]) -> str:
-    word_list = ", ".join(f"*{w.capitalize()}*" for w in words)
+    word_list = ", ".join(f"<b>{w.capitalize()}</b>" for w in words)
     return (
-        f"📚 *Weekly Vocab Check!*\n\n"
+        f"📚 <b>Weekly Vocab Check!</b>\n\n"
         f"You looked up {len(words)} word(s) this week: {word_list}\n\n"
         f"Let's see if they stuck. I'll ask one question per word.\n"
         f"Ready? Here's your first one 👇"
@@ -35,12 +35,14 @@ async def start_review_for_user(user_id: int, bot, chat_id: int):
     """Called by the scheduler every Friday. Kicks off the review session."""
     words = get_week_words(user_id)
     if not words:
-        await bot.send_message(chat_id=chat_id, text=build_no_words_msg(), parse_mode="Markdown")
+        await bot.send_message(
+            chat_id=chat_id, text=build_no_words_msg(), parse_mode="HTML"
+        )
         return
 
     set_review_state(user_id, words, q_index=0)
     intro = build_intro(words)
-    await bot.send_message(chat_id=chat_id, text=intro, parse_mode="Markdown")
+    await bot.send_message(chat_id=chat_id, text=intro, parse_mode="HTML")
 
     # Send first question
     await send_next_question(user_id, bot, chat_id)
@@ -65,30 +67,34 @@ async def send_next_question(user_id: int, bot, chat_id: int):
     # We re-use the review_state words_json slot with embedded question cache
     # Simple approach: send question and let handler match by state index
     text = _format_question(q, idx + 1, len(words))
-    await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+    await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
 
     # Cache question in DB so grader knows what to compare
     import json
-    from config import DB_PATH
+    from src.config import DB_PATH
     import sqlite3
+
     with sqlite3.connect(DB_PATH) as con:
-        con.execute("""
+        con.execute(
+            """
             UPDATE review_state
             SET words_json = ?
             WHERE user_id = ?
-        """, (json.dumps({"words": words, "current_q": q}), user_id))
+        """,
+            (json.dumps({"words": words, "current_q": q}), user_id),
+        )
         con.commit()
 
 
 async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str):
     """Called when user sends a message while a review is active."""
     import json, sqlite3
-    from config import DB_PATH
+    from src.config import DB_PATH
 
     with sqlite3.connect(DB_PATH) as con:
         row = con.execute(
             "SELECT q_index, words_json FROM review_state WHERE user_id = ? AND active = 1",
-            (user_id,)
+            (user_id,),
         ).fetchone()
 
     if not row:
@@ -126,9 +132,9 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
         emoji = "❌"
         response = f"{emoji} {feedback}"
         if explanation:
-            response += f"\n\n_{explanation}_"
+            response += f"\n\n<i>{explanation}</i>"
 
-    await bot.send_message(chat_id=chat_id, text=response, parse_mode="Markdown")
+    await bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
     # Advance to next question
     next_idx = idx + 1
@@ -139,10 +145,13 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
     else:
         # Update state with new index, clear current_q
         with sqlite3.connect(DB_PATH) as con:
-            con.execute("""
+            con.execute(
+                """
                 UPDATE review_state SET words_json = ?, q_index = ?
                 WHERE user_id = ?
-            """, (json.dumps({"words": words, "current_q": {}}), next_idx, user_id))
+            """,
+                (json.dumps({"words": words, "current_q": {}}), next_idx, user_id),
+            )
             con.commit()
         await send_next_question(user_id, bot, chat_id)
 
@@ -154,11 +163,11 @@ async def finish_review(user_id: int, bot, chat_id: int):
     await bot.send_message(
         chat_id=chat_id,
         text=(
-            "🎉 *Review complete!*\n\n"
+            "🎉 <b>Review complete!</b>\n\n"
             "That's all your words for this week. Keep looking up new ones and "
             "I'll quiz you again next Friday. You're building something real here. 💪"
         ),
-        parse_mode="Markdown"
+        parse_mode="HTML",
     )
 
 
@@ -167,12 +176,15 @@ def _format_question(q: dict, current: int, total: int) -> str:
     word = q.get("word", "").capitalize()
     question = q.get("question", "")
 
-    header = f"*Question {current} of {total}* — _{word}_\n\n"
+    header = f"<b>Question {current} of {total}</b> — <i>{word}</i>\n\n"
 
     if q_type == "fill-in-the-blank":
         return header + f"Fill in the blank:\n{question}"
     elif q_type == "true-or-false":
-        return header + f"True or False?\n{question}\n\nReply with *True* or *False*."
+        return (
+            header
+            + f"True or False?\n{question}\n\nReply with <b>True</b> or <b>False</b>."
+        )
     elif q_type == "write-your-own":
         return header + f"{question}\n\nSend me your sentence 👇"
     else:

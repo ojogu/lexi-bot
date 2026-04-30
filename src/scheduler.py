@@ -6,9 +6,9 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from config import REVIEW_HOUR, REVIEW_MINUTE, TIMEZONE
-from word_log import get_all_user_ids
-from review import start_review_for_user
+from src.config import REVIEW_HOUR, REVIEW_MINUTE, TIMEZONE
+from src.word_log import get_all_user_ids
+from src.review import start_review_for_user
 
 logger = logging.getLogger(__name__)
 

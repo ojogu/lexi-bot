@@ -5,7 +5,7 @@ Tracks every word a user looks up so the Friday review has data.
 
 import sqlite3
 from datetime import datetime, timedelta
-from config import DB_PATH
+from src.config import DB_PATH
 
 
 def _conn():

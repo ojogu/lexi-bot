@@ -11,3 +11,5 @@ wheels/
 
 .env
 .opencode/
+lexi.db
+agent.md

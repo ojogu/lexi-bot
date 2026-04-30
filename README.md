@@ -18,7 +18,7 @@ source venv/bin/activate.fish   # fish shell
 pip install -r requirements.txt
 
 cp .env.example .env
-# Fill in TELEGRAM_TOKEN and ANTHROPIC_API_KEY in .env
+# Fill in TELEGRAM_TOKEN and API_KEY in .env
 
 python main.py
 ```
@@ -35,7 +35,7 @@ cd /opt/lexi-bot
 git clone <your-repo> .
 
 cp .env.example .env
-nano .env  # fill in TELEGRAM_TOKEN and ANTHROPIC_API_KEY
+nano .env  # fill in TELEGRAM_TOKEN and API_KEY
 
 # Build and run
 docker compose up -d

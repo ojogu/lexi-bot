@@ -14,11 +14,16 @@ from telegram.ext import (
 
 from src.config import TELEGRAM_TOKEN
 from src.handlers import (
-    start, help_command, my_words, settings_command,
-    handle_message, handle_callback, error_handler,
+    start,
+    help_command,
+    my_words,
+    settings_command,
+    handle_message,
+    handle_callback,
+    error_handler,
 )
 from src.scheduler import build_scheduler
-from src.word_log import init_db
+from src.word_log import init_db, run_migrations
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -27,10 +32,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_COMMANDS = [
-    BotCommand("start",    "Welcome / re-run onboarding"),
+    BotCommand("start", "Welcome / re-run onboarding"),
     BotCommand("settings", "Change your preferences"),
-    BotCommand("mywords",  "See your words this week"),
-    BotCommand("help",     "How to use Lexi"),
+    BotCommand("mywords", "See your words this week"),
+    BotCommand("help", "How to use Lexi"),
 ]
 
 
@@ -40,15 +45,11 @@ async def on_startup(app):
 
 
 def main():
+    run_migrations()
     init_db()
     logger.info("Database initialised")
 
-    app = (
-        ApplicationBuilder()
-        .token(TELEGRAM_TOKEN)
-        .post_init(on_startup)
-        .build()
-    )
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("settings", settings_command))

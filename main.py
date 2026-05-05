@@ -4,10 +4,19 @@ Lexi bot entry point.
 
 import logging
 from telegram import BotCommand
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
 
 from src.config import TELEGRAM_TOKEN
-from src.handlers import start, help_command, my_words, handle_message, error_handler
+from src.handlers import (
+    start, help_command, my_words, settings_command,
+    handle_message, handle_callback, error_handler,
+)
 from src.scheduler import build_scheduler
 from src.word_log import init_db
 
@@ -18,9 +27,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_COMMANDS = [
-    BotCommand("start", "Welcome message"),
-    BotCommand("help", "How to use Lexi"),
-    BotCommand("mywords", "See your words for this week"),
+    BotCommand("start",    "Welcome / re-run onboarding"),
+    BotCommand("settings", "Change your preferences"),
+    BotCommand("mywords",  "See your words this week"),
+    BotCommand("help",     "How to use Lexi"),
 ]
 
 
@@ -33,20 +43,21 @@ def main():
     init_db()
     logger.info("Database initialised")
 
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_TOKEN)
+        .post_init(on_startup)
+        .build()
+    )
 
-    # Commands
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("mywords", my_words))
-
-    # All text messages
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Error handler
     app.add_error_handler(error_handler)
 
-    # Scheduler (Friday review)
     scheduler = build_scheduler(app.bot)
     scheduler.start()
     logger.info("Scheduler started")

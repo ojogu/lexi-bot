@@ -26,6 +26,8 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 async def _send_llm_response(message, text: str):
     try:
         await message.reply_text(text, parse_mode="HTML")
@@ -52,12 +54,15 @@ async def _send_pronunciation(message, word: str):
         logger.error(f"Failed to send pronunciation for '{word}': {e}")
 
 
+# ── Onboarding ────────────────────────────────────────────────────────────────
+
 ONBOARD_STEPS = {
     0: {
         "text": (
             "Welcome to Lexi! 🎉\n\n"
             "I explain words, fix spelling, compare similar words, explain quotes, "
             "and quiz you weekly.\n\n"
+            "Let me set up your preferences.\n\n"
             "Do you want a <b>Word of the Day</b> every morning at 8 AM?"
         ),
         "buttons": [
@@ -137,6 +142,8 @@ async def _finish_onboarding(user_id: int, bot, chat_id: int):
     )
 
 
+# ── Commands ──────────────────────────────────────────────────────────────────
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name or "there"
@@ -213,6 +220,8 @@ async def _show_settings(user_id: int, message):
     )
 
 
+# ── Callback handler ──────────────────────────────────────────────────────────
+
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -225,24 +234,34 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not onboard:
             return
 
+        # Always clear buttons from the tapped message first
+        await query.edit_message_reply_markup(reply_markup=None)
+
         if data.startswith("ob_wod_"):
             upsert_settings(user_id, word_of_day=int(data[-1]))
             set_onboard_state(user_id, step=1)
             await _send_onboard_step(chat_id, 1, context.bot)
+
         elif data.startswith("ob_audio_"):
             upsert_settings(user_id, audio=int(data[-1]))
             set_onboard_state(user_id, step=2)
             await _send_onboard_step(chat_id, 2, context.bot)
+
         elif data.startswith("ob_quiz_"):
             val = int(data[-1])
             upsert_settings(user_id, quiz_enabled=val)
-            next_step = 3 if val else 4
-            set_onboard_state(user_id, step=next_step)
-            await _send_onboard_step(chat_id, next_step, context.bot)
+            if val:
+                set_onboard_state(user_id, step=3)
+                await _send_onboard_step(chat_id, 3, context.bot)
+            else:
+                set_onboard_state(user_id, step=4)
+                await _send_onboard_step(chat_id, 4, context.bot)
+
         elif data.startswith("ob_qday_"):
             upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
             set_onboard_state(user_id, step=4)
             await _send_onboard_step(chat_id, 4, context.bot)
+
         elif data.startswith("ob_lesson_"):
             val = int(data[-1])
             upsert_settings(user_id, lesson_enabled=val)
@@ -251,6 +270,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _send_onboard_step(chat_id, 5, context.bot)
             else:
                 await _finish_onboarding(user_id, context.bot, chat_id)
+
         elif data.startswith("ob_lday_"):
             upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
             await _finish_onboarding(user_id, context.bot, chat_id)
@@ -271,20 +291,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton(d, callback_data=f"set_qday_{i}") for i, d in enumerate(DAY_SHORT[:4])],
                 [InlineKeyboardButton(d, callback_data=f"set_qday_{i+4}") for i, d in enumerate(DAY_SHORT[4:])]
             ]
-            await query.message.reply_text("Which day for your quiz?", reply_markup=InlineKeyboardMarkup(keyboard))
+            await query.message.reply_text(
+                "Which day for your quiz?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
         elif data == "set_lday":
             keyboard = [
                 [InlineKeyboardButton(d, callback_data=f"set_lday_{i}") for i, d in enumerate(DAY_SHORT[:4])],
                 [InlineKeyboardButton(d, callback_data=f"set_lday_{i+4}") for i, d in enumerate(DAY_SHORT[4:])]
             ]
-            await query.message.reply_text("Which day for your lesson?", reply_markup=InlineKeyboardMarkup(keyboard))
+            await query.message.reply_text(
+                "Which day for your lesson?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
         elif data.startswith("set_qday_"):
             upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
         elif data.startswith("set_lday_"):
             upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
 
+        # Refresh settings display
         settings = get_settings(user_id)
         wod = "ON 🟢" if settings.get("word_of_day") else "OFF 🔴"
         audio = "ON 🟢" if settings.get("audio") else "OFF 🔴"
@@ -305,6 +332,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+# ── Message handler ───────────────────────────────────────────────────────────
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
@@ -312,12 +341,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
+    # Block vocab queries during onboarding
     if get_onboard_state(user_id):
         await update.message.reply_text(
             "Please complete the setup first — tap one of the buttons above. 👆"
         )
         return
 
+    # Route to review handler if session is active
     state = get_review_state(user_id)
     if state:
         handled = await handle_review_answer(
@@ -343,10 +374,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif intent == "QUOTE_EXPLANATION":
             result = explain_quote(text)
             await _send_llm_response(update.message, result)
+            # No audio for quotes
 
         elif intent == "WORD_DEDUCTION":
             word, result = deduce_word(text)
             await _send_llm_response(update.message, result)
+            # Log the deduced word, not the raw description
             if word:
                 log_word(user_id, word)
                 if settings.get("audio", 1):
@@ -354,7 +387,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:  # WORD_LOOKUP
             result = explain_word(text)
-            clean = extract_word(text)
+            # Log the actual word, stripped of question prefixes
+            from src.tts import extract_word as _extract
+            clean = _extract(text)
             log_word(user_id, clean)
             await _send_llm_response(update.message, result)
             if settings.get("audio", 1):

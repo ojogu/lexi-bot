@@ -1,17 +1,17 @@
 """
-Text-to-speech via ElevenLabs SDK.
+Text-to-speech via ElevenLabs SDK (Asynchronous).
 Generates natural-sounding pronunciation of a word or phrase.
 Returns raw audio bytes in mp3 format, ready to send as a Telegram voice note.
 """
 
 import re
 import logging
-from elevenlabs.client import ElevenLabs
+from elevenlabs.client import AsyncElevenLabs
 from src.config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
 
 logger = logging.getLogger(__name__)
 
-_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+_client = AsyncElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # Common question prefixes to strip before passing to TTS
 _QUESTION_PREFIXES = re.compile(
@@ -31,9 +31,9 @@ def extract_word(text: str) -> str:
     return cleaned.strip()
 
 
-def generate_pronunciation(word: str) -> bytes | None:
+async def generate_pronunciation(word: str) -> bytes | None:
     """
-    Call ElevenLabs and return mp3 audio bytes for the given word.
+    Call ElevenLabs asynchronously and return mp3 audio bytes for the given word.
     Returns None if the call fails — caller handles gracefully.
     """
     core_word = extract_word(word)
@@ -42,15 +42,19 @@ def generate_pronunciation(word: str) -> bytes | None:
     logger.info(f"[ElevenLabs] Requesting pronunciation for '{core_word}' (input: '{word}')")
 
     try:
-        audio = _client.text_to_speech.convert(
+        audio_iterator = _client.text_to_speech.convert(
             text=text,
             voice_id=ELEVENLABS_VOICE_ID,
             model_id="eleven_flash_v2_5",  # lowest latency model
             output_format="mp3_44100_128",
         )
 
-        # SDK returns a generator — collect all chunks into bytes
-        audio_bytes = b"".join(audio)
+        # Async iterator returns chunks — collect into bytes
+        audio_chunks = []
+        async for chunk in audio_iterator:
+            audio_chunks.append(chunk)
+            
+        audio_bytes = b"".join(audio_chunks)
         logger.info(f"[ElevenLabs] Audio received: {len(audio_bytes)} bytes")
         return audio_bytes
 

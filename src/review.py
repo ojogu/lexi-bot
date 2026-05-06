@@ -5,7 +5,7 @@ Handles quiz questions, answer grading, navigation (next/previous), and lesson d
 
 import re
 import json
-import sqlite3
+import aiosqlite
 import logging
 from src.lexi import generate_review_question, grade_sentence, grade_answer, generate_lesson
 from src.word_log import (
@@ -25,14 +25,14 @@ SENTENCE_HINT = "Write a sentence using the word — or type <b>next</b> to skip
 
 
 async def start_review_for_user(user_id: int, bot, chat_id: int):
-    words = get_week_words(user_id)
+    words = await get_week_words(user_id)
     if not words:
         await bot.send_message(
             chat_id=chat_id,
             text="📭 No words to review this week!\n\nSend me any word and I'll quiz you next time."
         )
         return
-    set_review_state(user_id, words, q_index=0)
+    await set_review_state(user_id, words, q_index=0)
     word_list = ", ".join(w.capitalize() for w in words)
     await bot.send_message(
         chat_id=chat_id,
@@ -49,7 +49,7 @@ async def start_review_for_user(user_id: int, bot, chat_id: int):
 
 
 async def send_next_question(user_id: int, bot, chat_id: int):
-    state = get_review_state(user_id)
+    state = await get_review_state(user_id)
     if not state:
         return
     words = state["words"]
@@ -58,18 +58,19 @@ async def send_next_question(user_id: int, bot, chat_id: int):
         await finish_review(user_id, bot, chat_id)
         return
     word = words[idx]
-    q = generate_review_question(word, idx)
+    q = await generate_review_question(word, idx)
     text = _format_question(q, idx + 1, len(words))
     await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
-    _cache_question(user_id, words, idx, q)
+    await _cache_question(user_id, words, idx, q)
 
 
 async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str) -> bool:
-    with sqlite3.connect(DB_PATH) as con:
-        row = con.execute(
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
             "SELECT q_index, words_json FROM review_state WHERE user_id = ? AND active = 1",
             (user_id,)
-        ).fetchone()
+        ) as cursor:
+            row = await cursor.fetchone()
 
     if not row:
         return False
@@ -77,26 +78,17 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
     idx = row[0]
     state_data = json.loads(row[1])
     words = state_data["words"]
-    q = state_data.get("current_q", {})
-
-    if not q:
-        return False
-
-    q_type = q.get("type", "")
-    word = q.get("word", words[idx] if idx < len(words) else "")
-    answer = q.get("answer", "")
-    explanation = q.get("explanation", "")
     cleaned = user_answer.strip().lower()
 
     # ── Navigation ─────────────────────────────────────────────────────────
     if cleaned in NAV_NEXT:
         await bot.send_message(chat_id=chat_id, text="⏭ Skipping...")
         next_idx = idx + 1
-        advance_review(user_id, next_idx)
+        await advance_review(user_id, next_idx)
         if next_idx >= len(words):
             await finish_review(user_id, bot, chat_id)
         else:
-            _cache_question(user_id, words, next_idx, {})
+            await _cache_question(user_id, words, next_idx, {})
             await send_next_question(user_id, bot, chat_id)
         return True
 
@@ -105,11 +97,20 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
             await bot.send_message(chat_id=chat_id, text="You're already on the first question.")
         else:
             prev_idx = idx - 1
-            advance_review(user_id, prev_idx)
-            _cache_question(user_id, words, prev_idx, {})
+            await advance_review(user_id, prev_idx)
+            await _cache_question(user_id, words, prev_idx, {})
             await bot.send_message(chat_id=chat_id, text="⏮ Going back...")
             await send_next_question(user_id, bot, chat_id)
         return True
+
+    q = state_data.get("current_q", {})
+    if not q:
+        return False
+
+    q_type = q.get("type", "")
+    word = q.get("word", words[idx] if idx < len(words) else "")
+    answer = q.get("answer", "")
+    explanation = q.get("explanation", "")
 
     # ── Validate input ──────────────────────────────────────────────────────
     if q_type == "fill-in-the-blank":
@@ -129,7 +130,7 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
 
     # ── Grade ───────────────────────────────────────────────────────────────
     if q_type == "write-your-own":
-        grade = grade_sentence(word, user_answer)
+        grade = await grade_sentence(word, user_answer)
         is_correct = grade.get("result") == "CORRECT"
         feedback = grade.get("feedback", "")
     else:
@@ -145,23 +146,23 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
     await bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
     next_idx = idx + 1
-    advance_review(user_id, next_idx)
+    await advance_review(user_id, next_idx)
     if next_idx >= len(words):
         await finish_review(user_id, bot, chat_id)
     else:
-        _cache_question(user_id, words, next_idx, {})
+        await _cache_question(user_id, words, next_idx, {})
         await send_next_question(user_id, bot, chat_id)
 
     return True
 
 
 async def finish_review(user_id: int, bot, chat_id: int):
-    end_review(user_id)
+    await end_review(user_id)
     await bot.send_message(
         chat_id=chat_id,
         text="🎉 Review complete!\n\nKeep looking up words and I'll quiz you next time. 💪"
     )
-    settings = get_settings(user_id)
+    settings = await get_settings(user_id)
     if settings.get("lesson_enabled", 1):
         await send_lesson(user_id, bot, chat_id)
 
@@ -170,7 +171,7 @@ async def send_lesson(user_id: int, bot, chat_id: int):
     try:
         from datetime import date
         lesson_number = (user_id + date.today().toordinal()) % 20
-        lesson = generate_lesson(lesson_number)
+        lesson = await generate_lesson(lesson_number)
         await bot.send_message(chat_id=chat_id, text=lesson, parse_mode="HTML")
     except Exception as e:
         logger.error(f"Failed to send lesson to {user_id}: {e}")
@@ -191,10 +192,10 @@ def _format_question(q: dict, current: int, total: int) -> str:
     return header + question
 
 
-def _cache_question(user_id: int, words: list, idx: int, q: dict):
-    with sqlite3.connect(DB_PATH) as con:
-        con.execute(
+async def _cache_question(user_id: int, words: list, idx: int, q: dict):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
             "UPDATE review_state SET words_json = ?, q_index = ? WHERE user_id = ?",
             (json.dumps({"words": words, "current_q": q}), idx, user_id)
         )
-        con.commit()
+        await db.commit()

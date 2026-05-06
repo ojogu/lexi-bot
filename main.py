@@ -40,15 +40,14 @@ BOT_COMMANDS = [
 
 
 async def on_startup(app):
+    await run_migrations()
+    await init_db()
+    logger.info("Database initialised")
     await app.bot.set_my_commands(BOT_COMMANDS)
     logger.info("Bot commands registered with Telegram")
 
 
 def main():
-    run_migrations()
-    init_db()
-    logger.info("Database initialised")
-
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
 
     app.add_handler(CommandHandler("start", start))

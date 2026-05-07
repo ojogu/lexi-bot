@@ -43,7 +43,7 @@ async def _send_llm_response(message, text: str):
 async def _send_pronunciation(message, word: str):
     try:
         status = await message.reply_text("🎙️ Generating pronunciation...")
-        audio_bytes = generate_pronunciation(word)
+        audio_bytes = await generate_pronunciation(word)
         await status.delete()
         if audio_bytes:
             await message.reply_voice(
@@ -121,8 +121,8 @@ async def _send_onboard_step(chat_id: int, step: int, bot):
 
 
 async def _finish_onboarding(user_id: int, bot, chat_id: int):
-    end_onboarding(user_id)
-    settings = get_settings(user_id)
+    await end_onboarding(user_id)
+    settings = await get_settings(user_id)
     wod = "✅" if settings.get("word_of_day") else "❌"
     audio = "✅" if settings.get("audio") else "❌"
     quiz = f"✅ {DAY_NAMES[settings.get('quiz_day', 4)]}" if settings.get("quiz_enabled") else "❌"
@@ -147,13 +147,13 @@ async def _finish_onboarding(user_id: int, bot, chat_id: int):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name or "there"
-    settings = get_settings(user_id)
+    settings = await get_settings(user_id)
     if settings.get("onboarded"):
         await update.message.reply_text(
             f"Hey {name}! Send me any word, or use /help to see everything I can do."
         )
         return
-    set_onboard_state(user_id, step=0, active=1)
+    await set_onboard_state(user_id, step=0, active=1)
     await update.message.reply_text(
         f"👋 Hey {name}! I'm <b>Lexi</b>, your personal vocab tutor.",
         parse_mode="HTML"
@@ -182,7 +182,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def my_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    words = get_week_words(user_id)
+    words = await get_week_words(user_id)
     if not words:
         await update.message.reply_text(
             "You haven't looked up any words this week yet. Send me a word to get started!"
@@ -200,7 +200,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _show_settings(user_id: int, message):
-    settings = get_settings(user_id)
+    settings = await get_settings(user_id)
     wod = "ON 🟢" if settings.get("word_of_day") else "OFF 🔴"
     audio = "ON 🟢" if settings.get("audio") else "OFF 🔴"
     quiz = f"ON 🟢 — {DAY_NAMES[settings.get('quiz_day', 4)]}" if settings.get("quiz_enabled") else "OFF 🔴"
@@ -230,7 +230,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat_id
 
     if data.startswith("ob_"):
-        onboard = get_onboard_state(user_id)
+        onboard = await get_onboard_state(user_id)
         if not onboard:
             return
 
@@ -238,54 +238,54 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_reply_markup(reply_markup=None)
 
         if data.startswith("ob_wod_"):
-            upsert_settings(user_id, word_of_day=int(data[-1]))
-            set_onboard_state(user_id, step=1)
+            await upsert_settings(user_id, word_of_day=int(data[-1]))
+            await set_onboard_state(user_id, step=1)
             await _send_onboard_step(chat_id, 1, context.bot)
 
         elif data.startswith("ob_audio_"):
-            upsert_settings(user_id, audio=int(data[-1]))
-            set_onboard_state(user_id, step=2)
+            await upsert_settings(user_id, audio=int(data[-1]))
+            await set_onboard_state(user_id, step=2)
             await _send_onboard_step(chat_id, 2, context.bot)
 
         elif data.startswith("ob_quiz_"):
             val = int(data[-1])
-            upsert_settings(user_id, quiz_enabled=val)
+            await upsert_settings(user_id, quiz_enabled=val)
             if val:
-                set_onboard_state(user_id, step=3)
+                await set_onboard_state(user_id, step=3)
                 await _send_onboard_step(chat_id, 3, context.bot)
             else:
-                set_onboard_state(user_id, step=4)
+                await set_onboard_state(user_id, step=4)
                 await _send_onboard_step(chat_id, 4, context.bot)
 
         elif data.startswith("ob_qday_"):
-            upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
-            set_onboard_state(user_id, step=4)
+            await upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
+            await set_onboard_state(user_id, step=4)
             await _send_onboard_step(chat_id, 4, context.bot)
 
         elif data.startswith("ob_lesson_"):
             val = int(data[-1])
-            upsert_settings(user_id, lesson_enabled=val)
+            await upsert_settings(user_id, lesson_enabled=val)
             if val:
-                set_onboard_state(user_id, step=5)
+                await set_onboard_state(user_id, step=5)
                 await _send_onboard_step(chat_id, 5, context.bot)
             else:
                 await _finish_onboarding(user_id, context.bot, chat_id)
 
         elif data.startswith("ob_lday_"):
-            upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
+            await upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
             await _finish_onboarding(user_id, context.bot, chat_id)
 
     elif data.startswith("set_"):
-        settings = get_settings(user_id)
+        settings = await get_settings(user_id)
 
         if data == "set_toggle_wod":
-            upsert_settings(user_id, word_of_day=0 if settings.get("word_of_day") else 1)
+            await upsert_settings(user_id, word_of_day=0 if settings.get("word_of_day") else 1)
         elif data == "set_toggle_audio":
-            upsert_settings(user_id, audio=0 if settings.get("audio") else 1)
+            await upsert_settings(user_id, audio=0 if settings.get("audio") else 1)
         elif data == "set_toggle_quiz":
-            upsert_settings(user_id, quiz_enabled=0 if settings.get("quiz_enabled") else 1)
+            await upsert_settings(user_id, quiz_enabled=0 if settings.get("quiz_enabled") else 1)
         elif data == "set_toggle_lesson":
-            upsert_settings(user_id, lesson_enabled=0 if settings.get("lesson_enabled") else 1)
+            await upsert_settings(user_id, lesson_enabled=0 if settings.get("lesson_enabled") else 1)
         elif data == "set_qday":
             keyboard = [
                 [InlineKeyboardButton(d, callback_data=f"set_qday_{i}") for i, d in enumerate(DAY_SHORT[:4])],
@@ -307,12 +307,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         elif data.startswith("set_qday_"):
-            upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
+            await upsert_settings(user_id, quiz_day=int(data.split("_")[-1]))
         elif data.startswith("set_lday_"):
-            upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
+            await upsert_settings(user_id, lesson_day=int(data.split("_")[-1]))
 
         # Refresh settings display
-        settings = get_settings(user_id)
+        settings = await get_settings(user_id)
         wod = "ON 🟢" if settings.get("word_of_day") else "OFF 🔴"
         audio = "ON 🟢" if settings.get("audio") else "OFF 🔴"
         quiz = f"ON 🟢 — {DAY_NAMES[settings.get('quiz_day', 4)]}" if settings.get("quiz_enabled") else "OFF 🔴"
@@ -342,14 +342,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Block vocab queries during onboarding
-    if get_onboard_state(user_id):
+    if await get_onboard_state(user_id):
         await update.message.reply_text(
             "Please complete the setup first — tap one of the buttons above. 👆"
         )
         return
 
     # Route to review handler if session is active
-    state = get_review_state(user_id)
+    state = await get_review_state(user_id)
     if state:
         handled = await handle_review_answer(
             user_id, context.bot, update.effective_chat.id, text
@@ -360,37 +360,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("On it... ⏳")
 
     try:
-        intent = detect_intent(text)
-        settings = get_settings(user_id)
+        intent = await detect_intent(text)
+        settings = await get_settings(user_id)
 
         if intent == "SPELLING":
-            result = fix_spelling(text)
+            result = await fix_spelling(text)
             await _send_llm_response(update.message, result)
 
         elif intent == "COMPARE":
-            result = compare_words(text)
+            result = await compare_words(text)
             await _send_llm_response(update.message, result)
 
         elif intent == "QUOTE_EXPLANATION":
-            result = explain_quote(text)
+            result = await explain_quote(text)
             await _send_llm_response(update.message, result)
             # No audio for quotes
 
         elif intent == "WORD_DEDUCTION":
-            word, result = deduce_word(text)
+            word, result = await deduce_word(text)
             await _send_llm_response(update.message, result)
             # Log the deduced word, not the raw description
             if word:
-                log_word(user_id, word)
+                await log_word(user_id, word)
                 if settings.get("audio", 1):
                     await _send_pronunciation(update.message, word)
 
         else:  # WORD_LOOKUP
-            result = explain_word(text)
+            result = await explain_word(text)
             # Log the actual word, stripped of question prefixes
             from src.tts import extract_word as _extract
             clean = _extract(text)
-            log_word(user_id, clean)
+            await log_word(user_id, clean)
             await _send_llm_response(update.message, result)
             if settings.get("audio", 1):
                 await _send_pronunciation(update.message, text)

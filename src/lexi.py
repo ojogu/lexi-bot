@@ -14,8 +14,8 @@ from src.prompt import (
 )
 
 
-def _call(system: str, user: str, temperature: float = 0.2, max_tokens: int = 600) -> str:
-    response = litellm.completion(
+async def _call(system: str, user: str, temperature: float = 0.2, max_tokens: int = 600) -> str:
+    response = await litellm.acompletion(
         api_key=API_KEY,
         model=MODEL,
         messages=[
@@ -28,28 +28,28 @@ def _call(system: str, user: str, temperature: float = 0.2, max_tokens: int = 60
     return response.choices[0].message.content.strip()
 
 
-def detect_intent(text: str) -> str:
-    raw = _call(INTENT_SYSTEM_PROMPT, text, temperature=0.0, max_tokens=20)
+async def detect_intent(text: str) -> str:
+    raw = await _call(INTENT_SYSTEM_PROMPT, text, temperature=0.0, max_tokens=20)
     for intent in ("WORD_DEDUCTION", "QUOTE_EXPLANATION", "SPELLING", "COMPARE", "WORD_LOOKUP"):
         if intent in raw:
             return intent
     return "WORD_LOOKUP"
 
 
-def explain_word(word: str) -> str:
-    return _call(SYSTEM_PROMPT, word)
+async def explain_word(word: str) -> str:
+    return await _call(SYSTEM_PROMPT, word)
 
 
-def fix_spelling(text: str) -> str:
-    return _call(SPELLING_SYSTEM_PROMPT, text, temperature=0.1, max_tokens=300)
+async def fix_spelling(text: str) -> str:
+    return await _call(SPELLING_SYSTEM_PROMPT, text, temperature=0.1, max_tokens=300)
 
 
-def compare_words(text: str) -> str:
-    return _call(COMPARE_SYSTEM_PROMPT, text)
+async def compare_words(text: str) -> str:
+    return await _call(COMPARE_SYSTEM_PROMPT, text)
 
 
-def deduce_word(text: str) -> tuple[str, str]:
-    raw = _call(DEDUCTION_SYSTEM_PROMPT, text, temperature=0.3)
+async def deduce_word(text: str) -> tuple[str, str]:
+    raw = await _call(DEDUCTION_SYSTEM_PROMPT, text, temperature=0.3)
     word = ""
     lines = raw.splitlines()
     for i, line in enumerate(lines):
@@ -60,20 +60,20 @@ def deduce_word(text: str) -> tuple[str, str]:
     return word, raw
 
 
-def explain_quote(text: str) -> str:
-    return _call(QUOTE_EXPLANATION_SYSTEM_PROMPT, text, temperature=0.3, max_tokens=500)
+async def explain_quote(text: str) -> str:
+    return await _call(QUOTE_EXPLANATION_SYSTEM_PROMPT, text, temperature=0.3, max_tokens=500)
 
 
-def word_of_day() -> tuple[str, str]:
-    raw = _call(WORD_OF_DAY_SYSTEM_PROMPT, "Give me today's word.", temperature=0.9)
+async def word_of_day() -> tuple[str, str]:
+    raw = await _call(WORD_OF_DAY_SYSTEM_PROMPT, "Give me today's word.", temperature=0.9)
     match = re.search(r'<b>([^<]+)</b>\s*\n\s*<i>', raw)
     word = match.group(1).strip() if match else "word"
     word = word.replace("🌟 Word of the Day", "").strip()
     return word, raw
 
 
-def generate_lesson(lesson_number: int) -> str:
-    return _call(
+async def generate_lesson(lesson_number: int) -> str:
+    return await _call(
         LESSON_SYSTEM_PROMPT,
         f"lesson_number: {lesson_number}",
         temperature=0.5,
@@ -81,8 +81,8 @@ def generate_lesson(lesson_number: int) -> str:
     )
 
 
-def generate_review_question(word: str, q_index: int) -> dict:
-    raw = _call(
+async def generate_review_question(word: str, q_index: int) -> dict:
+    raw = await _call(
         REVIEW_SYSTEM_PROMPT,
         f"Word: {word}\nQuestion number in session: {q_index + 1}",
         temperature=0.4,
@@ -91,8 +91,8 @@ def generate_review_question(word: str, q_index: int) -> dict:
     return _parse_question(raw)
 
 
-def grade_sentence(word: str, sentence: str) -> dict:
-    raw = _call(
+async def grade_sentence(word: str, sentence: str) -> dict:
+    raw = await _call(
         GRADE_SYSTEM_PROMPT,
         f"Word: {word}\nStudent's sentence: {sentence}",
         max_tokens=200,

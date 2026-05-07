@@ -1,139 +1,103 @@
 # Lexi Bot
 
-A Telegram vocabulary tutor for Nigerian professionals and students.
-
-**Try it:** http://t.me/uselexiBot  
-**GitHub:** https://github.com/ojogu/lexi-bot
+A Telegram vocabulary tutor for Nigerian professionals and students. Lexi explains words, fixes spelling, compares similar words, and quizzes users weekly — all through a conversational interface.
 
 ---
 
-## Features
+## The Problem
 
-| Feature | What It Does |
-|---|---|
-| **Word Lookup** | Send any English word — get a structured definition, pronunciation guide, usage examples, and memory hook in seconds |
-| **Spelling Fix** | Send a misspelled word — get the correction with a spelling tip |
-| **Word Comparison** | Ask "difference between X and Y" — get a clear breakdown of when to use each |
-| **Word Deduction** | Describe a concept ("what's the word for someone who talks too much?") — get the exact word |
-| **Quote Explanation** | Paste a quote or saying — get a plain-language breakdown with real-world examples |
-| **Audio Pronunciation** | Every word lookup optionally includes a voice note with natural pronunciation via ElevenLabs |
-| **Weekly Quiz** | Every Friday (configurable), get quizzed on the words you looked up that week — multiple question types |
-| **Grammar Lessons** | After each quiz, receive a short practical English lesson |
-| **Word of the Day** | Optional morning word with definition and usage |
+ professionals and students in Nigeria often encounter English words they don't know — in articles, meetings, or exams. Searching Google takes time, definitions are often confusing, and there's no way to retain new vocabulary over time. Lexi solves this by providing instant, context-rich explanations tailored for Nigerian speakers, with pronunciation audio, spaced repetition quizzes, and built-in grammar lessons.
 
 ---
 
-## Quick Start (Docker)
+## Key Features
 
-```fish
-# On your VPS
-mkdir -p /opt/lexi-bot
-cd /opt/lexi-bot
+- **Word Lookup** — Send any word and get a definition, pronunciation, usage in casual and professional contexts, common mistakes, synonyms, and a memory hook in seconds.
+- **Spelling Fix** — Send a misspelled word and receive the correction with a practical spelling tip.
+- **Word Comparison** — Ask "difference between X and Y" and receive a clear breakdown of when to use each word.
+- **Word Deduction** — Describe a concept ("what's the word for someone who talks too much?") and get the exact word.
+- **Quote Explanation** — Paste a quote or saying and receive a plain-language breakdown with real-world examples.
+- **Audio Pronunciation** — Every word lookup optionally includes a voice note with natural pronunciation via ElevenLabs text-to-speech.
+- **Weekly Quiz** — Every Friday (configurable), each user receives a quiz on their looked-up words with multiple question types and immediate feedback.
+- **Grammar Lessons** — After each quiz, a short practical English lesson is delivered covering topics like affect/effect, punctuation, and sentence structure.
 
-git clone https://github.com/ojogu/lexi-bot .
+---
 
-cp .env.example .env
-nano .env  # fill in TELEGRAM_TOKEN and API_KEY
+## Tech Stack
 
-docker compose up -d --build
+| Layer | Technology | Why |
+|-------|------------|-----|
+| Bot Framework | python-telegram-bot 21.x | Official Python library for Telegram Bot API; supports async handlers and callbacks natively. |
+| LLM Integration | LiteLLM 1.48.x | Unifies OpenAI, Anthropic, Google, and other providers behind a single API. Switch models via one env var without code changes. |
+| Task Scheduling | APScheduler 3.10.x | Runs weekly quiz triggers per-user in-process without external workers. |
+| Database | SQLite | Zero-config, file-based persistence. Suits single-instance deployments; data lives in a mapped volume. |
+| Text-to-Speech | ElevenLabs | High-quality neural voices in MP3 format for Telegram voice messages. |
+| Deployment | Docker + Docker Compose | Single-command bring-up; containerized Python 3.12 with uv for fast dependency resolution. |
+
+---
+
+## System Architecture
+
+```
+User Message
+      │
+      ▼
+┌─────────────────┐
+│  Intent Detector  │   (LiteLLM classifies: lookup, spelling, compare, deduction, quote)
+│    (lexi.py)     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   LLM Response   │   (Structured reply via LiteLLM with Nigerian context prompts)
+│   (lexi.py)      │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌───────┐ ┌───────┐
+│  TTS  │ │  DB   │
+│  (tts)│ │(sqlite)│
+└───┬───┘ └───┬───┘
+    │         │
+    ▼         ▼
+┌─────────────────┐
+│   Telegram      │   (Voice note or text reply)
+│  User Output    │
+└─────────────────┘
 ```
 
----
-
-## Environment Variables
-
-| Variable | Required | Description | Default |
-|---|---|---|---|
-| `TELEGRAM_TOKEN` | Yes | Your Telegram bot token from @BotFather | — |
-| `API_KEY` | Yes | API key for your LLM provider (OpenAI, Anthropic, Google, etc.) | — |
-| `MODEL` | No | LiteLLM model identifier | `anthropic/claude-haiku-4-5` |
-| `ELEVENLABS_API_KEY` | Yes | API key from ElevenLabs for text-to-speech | — |
-| `ELEVENLABS_VOICE_ID` | Yes | Voice ID from your ElevenLabs voice library | — |
-| `REVIEW_HOUR` | No | Hour to send weekly quiz (24-hour format) | `18` |
-| `REVIEW_MINUTE` | No | Minute to send weekly quiz | `0` |
-| `TIMEZONE` | No | Timezone for scheduled tasks | `Africa/Lagos` |
-| `DB_PATH` | No | Path to SQLite database file | `./lexi.db` |
-
-### Switching LLM Provider
-
-Change one line in `.env`:
-
-```bash
-# Claude (default)
-MODEL=anthropic/claude-haiku-4-5
-
-# OpenAI
-MODEL=openai/gpt-4o-mini
-
-# Gemini
-MODEL=gemini/gemini-1.5-flash
-```
-
-Add the matching API key env var (`OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.) to your `.env`.
+Full architecture and database schema are documented in `docs/`.
 
 ---
 
-## Commands
+## Getting Started
 
-| Command | What It Does |
-|---|---|
-| `/start` | Welcome message — kicks off onboarding if new user |
-| `/settings` | Change your preferences (Word of Day, audio, quiz, lessons) |
-| `/mywords` | See all words you've looked up this week |
-| `/help` | How to use the bot |
+### Prerequisites
 
----
+- Docker and Docker Compose
+- Telegram bot token from [@BotFather](https://t.me/BotFather)
+- LLM API key (OpenAI, Anthropic, Google, etc.)
+- ElevenLabs API key and voice ID from your ElevenLabs dashboard
 
-## How It Works
-
-1. **Intent Detection** — Every message is classified by an LLM to route it to the right handler (lookup, spelling, comparison, deduction, or quote explanation)
-2. **LiteLLM Integration** — All LLM calls go through LiteLLM, enabling model switching without code changes
-3. **SQLite Persistence** — Four tables track users: `word_log`, `review_state`, `user_settings`, `onboard_state`
-4. **APScheduler** — Runs Friday review jobs per-user based on their quiz_day preference
-5. **ElevenLabs TTS** — Generates pronunciation voice notes in MP3 format for Telegram
-
----
-
-## Friday Review
-
-Every Friday at 6 PM (configurable), the bot sends each user a quiz on their week's words.
-
-- Three question types rotate: fill-in-the-blank, true/false, write your own sentence
-- Navigate with `next` / `previous`
-- Wrong answers get a warm correction with the right answer
-- After the quiz, a grammar lesson is delivered automatically if enabled
-
----
-
-## Docker Commands
+### Clone and Setup
 
 ```fish
-docker compose up -d          # Start the bot
-docker compose logs -f        # View logs
-docker compose restart        # Restart after code changes
-docker compose down           # Stop and remove container (data persists in volume)
-docker compose up -d --build  # Rebuild after code changes
-```
-
----
-
-## Contributing
-
-Contributions are welcome!
-
-```fish
-# Clone and setup
 git clone https://github.com/ojogu/lexi-bot
 cd lexi-bot
 cp .env.example .env
-
-# Lint and typecheck
-ruff check .
-mypy .
-
-# Run tests (if any)
-pytest
+nano .env  # fill in TELEGRAM_TOKEN, API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
+docker compose up -d --build
 ```
+
+### Access Points
+
+| Service | URL |
+|---------|-----|
+| Telegram Bot | `t.me/uselexiBot` |
+| Logs | `docker compose logs -f` |
+| Database (local) | `./lexi.db` |
 
 ---
 
@@ -141,25 +105,49 @@ pytest
 
 ```
 lexi-bot/
-├── main.py              # Entry point, bot setup, handler registration
-├── src/
-│   ├── config.py        # Environment variable loading
-│   ├── handlers.py      # Telegram message handlers, callbacks, onboarding
-│   ├── lexi.py         # LiteLLM integration, intent detection, prompts
-│   ├── prompt.py       # All LLM system prompts (word lookup, quiz, lesson, etc.)
-│   ├── review.py       # Quiz logic, answer grading, session state
-│   ├── scheduler.py    # APScheduler Friday trigger
-│   ├── tts.py          # ElevenLabs text-to-speech
-│   └── word_log.py     # SQLite persistence, migrations
-├── .env.example         # Template for environment variables
-├── Dockerfile           # Multi-stage build with uv
-├── docker-compose.yml   # Service definition
-├── pyproject.toml       # Project metadata and dependencies
-└── requirements.txt     # pip-compatible dependency list
+├── main.py                 # Entry point, bot initialization
+├── docker-compose.yml     # Single-service container definition
+├── Dockerfile            # Multi-stage build with uv
+├── pyproject.toml        # Project metadata and dependencies
+├── requirements.txt    # pip-compatible dependency list
+├── .env.example        # Environment template
+├── docs/               # Architecture and database docs
+└── src/
+    ├── config.py        # Environment variable loading and validation
+    ├── handlers.py     # Telegram message handlers, callbacks, onboarding UI
+    ├── lexi.py         # LiteLLM integration, intent detection, LLM prompts
+    ├── prompt.py      # All system prompts (word lookup, quiz, lesson, etc.)
+    ├── review.py      # Quiz logic, answer grading, session state, lesson delivery
+    ├── scheduler.py   # APScheduler weekly triggers
+    ├── tts.py          # ElevenLabs text-to-speech wrapper
+    └── word_log.py    # SQLite persistence layer, migrations
 ```
 
 ---
 
-## License
+## Development Commands
+
+```fish
+ruff check .     # Lint
+mypy .           # Typecheck
+pytest          # Run tests
+```
+
+---
+
+## Real Engineering Challenges
+
+**Intent Detection Drift** — Early versions of Lexi misclassified user queries (e.g., "difference between X and Y" as a lookup instead of COMPARE). Solved by adding explicit examples in the `INTENT_SYSTEM_PROMPT` at `src/prompt.py:63-93` and lowering the temperature to 0.0 for deterministic results.
+
+**Scheduler Timezone Bugs** — Users in different timezones received quizzes at the wrong hour. Fixed by persisting user-specific `quiz_day` (0-6) in SQLite and having APScheduler trigger based on the server hour, with the client timezone handled at display time. This is visible in `src/scheduler.py` and `src/word_log.py`.
+
+Full incident reports and architectural decisions are documented in `docs/`.
+
+---
+
+## Contact & License
+
+- **Try it:** https://t.me/uselexiBot
+- **GitHub:** https://github.com/ojogu/lexi-bot
 
 Open source — feel free to fork, contribute, or build your own version.

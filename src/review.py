@@ -9,7 +9,7 @@ import sqlite3
 import logging
 from src.lexi import generate_review_question, grade_sentence, grade_answer, generate_lesson
 from src.word_log import (
-    get_week_words, set_review_state, get_review_state,
+    get_words_in_scope, set_review_state, get_review_state,
     advance_review, end_review, get_settings,
 )
 from src.config import DB_PATH
@@ -25,7 +25,7 @@ SENTENCE_HINT = "Write a sentence using the word — or type <b>next</b> to skip
 
 
 async def start_review_for_user(user_id: int, bot, chat_id: int):
-    words = get_week_words(user_id)
+    words = get_words_in_scope(user_id)
     if not words:
         await bot.send_message(
             chat_id=chat_id,

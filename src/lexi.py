@@ -71,6 +71,9 @@ def word_of_day() -> tuple[str, str]:
     word = word.replace("🌟 Word of the Day", "").strip()
     return word, raw
 
+def check_grammar():
+    pass 
+
 
 def generate_lesson(lesson_number: int) -> str:
     return _call(

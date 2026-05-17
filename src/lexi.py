@@ -10,7 +10,7 @@ from src.prompt import (
     SYSTEM_PROMPT, INTENT_SYSTEM_PROMPT, SPELLING_SYSTEM_PROMPT,
     COMPARE_SYSTEM_PROMPT, DEDUCTION_SYSTEM_PROMPT,
     QUOTE_EXPLANATION_SYSTEM_PROMPT, WORD_OF_DAY_SYSTEM_PROMPT,
-    LESSON_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT, GRADE_SYSTEM_PROMPT,
+    LESSON_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT, GRADE_SYSTEM_PROMPT, GRAMMAR_CHECK_SYSTEM_PROMPT
 )
 
 
@@ -71,8 +71,9 @@ def word_of_day() -> tuple[str, str]:
     word = word.replace("🌟 Word of the Day", "").strip()
     return word, raw
 
-def check_grammar():
-    pass 
+def check_grammar(text: str) -> str:
+    """Check grammar, point out issues, and suggest corrections."""
+    return _call(GRAMMAR_CHECK_SYSTEM_PROMPT, text, temperature=0.2, max_tokens=600)
 
 
 def generate_lesson(lesson_number: int) -> str:

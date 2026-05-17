@@ -195,7 +195,20 @@ def get_review_state(user_id: int) -> dict | None:
         ).fetchone()
     if not row or not row["active"]:
         return None
-    return {"q_index": row["q_index"], "words": json.loads(row["words_json"])}
+
+    data = json.loads(row["words_json"])
+    
+
+    # Handle old corrupted format where words_json stored the full state object
+    if isinstance(data, dict) and "words" in data:
+        words = data["words"]
+        # words itself might also be the nested dict
+        if isinstance(words, dict) and "words" in words:
+            words = words["words"]
+    else:
+        words = data
+
+    return {"q_index": row["q_index"], "words": words}
 
 
 def advance_review(user_id: int, new_index: int):

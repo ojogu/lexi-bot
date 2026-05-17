@@ -61,6 +61,7 @@ async def send_next_question(user_id: int, bot, chat_id: int):
     q = generate_review_question(word, idx)
     text = _format_question(q, idx + 1, len(words))
     await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+    # Cache AFTER sending so the question is always stored with real data
     _cache_question(user_id, words, idx, q)
 
 
@@ -78,17 +79,9 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
     state_data = json.loads(row[1])
     words = state_data["words"]
     q = state_data.get("current_q", {})
-
-    if not q:
-        return False
-
-    q_type = q.get("type", "")
-    word = q.get("word", words[idx] if idx < len(words) else "")
-    answer = q.get("answer", "")
-    explanation = q.get("explanation", "")
     cleaned = user_answer.strip().lower()
 
-    # ── Navigation ─────────────────────────────────────────────────────────
+    # ── Navigation — handle even when q is empty ───────────────────────────
     if cleaned in NAV_NEXT:
         await bot.send_message(chat_id=chat_id, text="⏭ Skipping...")
         next_idx = idx + 1
@@ -96,7 +89,6 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
         if next_idx >= len(words):
             await finish_review(user_id, bot, chat_id)
         else:
-            _cache_question(user_id, words, next_idx, {})
             await send_next_question(user_id, bot, chat_id)
         return True
 
@@ -106,10 +98,18 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
         else:
             prev_idx = idx - 1
             advance_review(user_id, prev_idx)
-            _cache_question(user_id, words, prev_idx, {})
             await bot.send_message(chat_id=chat_id, text="⏮ Going back...")
             await send_next_question(user_id, bot, chat_id)
         return True
+
+    # ── No question cached yet — still return True to block word lookup ────
+    if not q:
+        return True
+
+    q_type = q.get("type", "")
+    word = q.get("word", words[idx] if idx < len(words) else "")
+    answer = q.get("answer", "")
+    explanation = q.get("explanation", "")
 
     # ── Validate input ──────────────────────────────────────────────────────
     if q_type == "fill-in-the-blank":
@@ -149,7 +149,7 @@ async def handle_review_answer(user_id: int, bot, chat_id: int, user_answer: str
     if next_idx >= len(words):
         await finish_review(user_id, bot, chat_id)
     else:
-        _cache_question(user_id, words, next_idx, {})
+        # Let send_next_question handle caching — no intermediate empty cache
         await send_next_question(user_id, bot, chat_id)
 
     return True
